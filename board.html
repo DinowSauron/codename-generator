@@ -179,6 +179,41 @@
       color: #c8d9ee
     }
 
+    /* Share modal theming (uses CSS variables so dark mode can override) */
+    :root {
+      --modal-bg: var(--bg);
+      --qr-bg: #fff;
+      --sharebox-bg: rgba(0, 0, 0, 0.04);
+      --share-icon-filter: none;
+    }
+
+    body.dark {
+      --modal-bg: #0b1622;
+      --qr-bg: #07101a;
+      --sharebox-bg: rgba(255, 255, 255, 0.04);
+      --share-icon-filter: invert(1) brightness(1.2);
+    }
+
+    /* Modal-specific selectors */
+    #shareModal #modalDialog {
+      background: var(--modal-bg);
+      color: inherit;
+    }
+
+    #shareModal #qrContainer {
+      background: var(--qr-bg);
+    }
+
+    #shareModal #shareUrlBox {
+      background: var(--sharebox-bg);
+    }
+
+    /* sharing icon adapts to dark mode */
+    img.share-icon {
+      transition: filter 150ms ease, opacity 150ms ease;
+      filter: var(--share-icon-filter);
+    }
+
     body.dark .controls button.ghost {
       background: #0b1622;
       color: #e6eef8;
@@ -198,7 +233,8 @@
       <button id="back" class="ghost">Voltar</button>
       <button id="shareBtn" class="ghost" title="Compartilhar tabuleiro"
         style="margin-left:6px;padding:8px 10px;font-size:13px;border-radius:10px;flex:0 0 auto;min-width:92px">
-        <img src="./icons/sharing.svg" alt="Compartilhar" style="width:18px;height:18px;vertical-align:middle;">
+        <img class="share-icon" src="./icons/sharing.svg" alt="Compartilhar"
+          style="width:18px;height:18px;vertical-align:middle;">
       </button>
     </div>
   </header>
@@ -216,17 +252,17 @@
     <div id="modalBackdrop"
       style="position:fixed;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px);z-index:1200;display:flex;align-items:center;justify-content:center;padding:20px">
       <div id="modalDialog" role="dialog" aria-modal="true"
-        style="background:var(--bg);border-radius:12px;padding:18px;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(10,10,20,0.4);text-align:center;color:inherit">
+        style="background:var(--modal-bg);border-radius:12px;padding:18px;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(10,10,20,0.4);text-align:center;color:inherit">
         <button id="modalClose" aria-label="Fechar"
           style="position:absolute;right:18px;top:18px;border:0;background:transparent;font-size:18px;cursor:pointer;color:inherit">✕</button>
         <div style="margin-top:4px;margin-bottom:8px;font-weight:600">Compartilhar tabuleiro</div>
         <div id="qrContainer"
-          style="width:260px;height:260px;margin:8px auto;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#fff;padding:8px">
+          style="width:260px;height:260px;margin:8px auto;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--qr-bg);padding:8px">
           <!-- QR image will be inserted here -->
           <img id="qrImage" alt="QR code" style="max-width:100%;height:auto;display:block;border-radius:6px">
         </div>
         <div id="shareUrlBox"
-          style="max-width:260px;margin:8px auto;overflow:hidden;border-radius:10px;background:rgba(0,0,0,0.04);padding:8px">
+          style="max-width:260px;margin:8px auto;overflow:hidden;border-radius:10px;background:var(--sharebox-bg);padding:8px">
           <a id="shareUrlText" href="#" target="_blank" rel="noopener"
             style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:inherit;text-decoration:none">link</a>
         </div>
@@ -281,6 +317,7 @@
     const backBtn = document.getElementById('back');
     const shareBtn = document.getElementById('shareBtn');
 
+    // initial summary; will be updated by makeGrid() to include seed
     configSummary.textContent = `${cfg.largura} x ${cfg.altura} — Itens: ${cfg.itens}, Exclusões: ${cfg.exclusoes}`;
 
     (function () {
@@ -290,23 +327,73 @@
       } catch (e) { }
     })();
 
-    function shuffle(arr) {
+    // small fast hash to convert a string into a 32-bit number (xfnv1a)
+    function xfnv1a(str) {
+      let h = 2166136261 >>> 0;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+      return h >>> 0;
+    }
+
+    // mulberry32 PRNG - deterministic from a 32-bit seed
+    function mulberry32(a) {
+      return function () {
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function makeRngFromSeed(seed) {
+      // seed may be a number or string
+      const s = (typeof seed === 'number') ? seed : xfnv1a(String(seed));
+      return mulberry32(s);
+    }
+
+    // Fisher-Yates shuffle but using a provided rng function
+    function shuffle(arr, rng = Math.random) {
       for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(rng() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
       }
       return arr;
     }
 
-    function makeGrid() {
+    function makeGrid(seedOverride) {
       const width = cfg.largura;
       const height = cfg.altura;
       const totalCells = width * height;
       gridEl.innerHTML = '';
 
-      // Decide cor inicial aleatória
+      // Decide cor inicial aleatória usando RNG derivado da seed
+      // determine seed to use: preference order -> seedOverride, cfg.seed, generate new
+      let seedToUse = seedOverride || cfg.seed;
+      if (!seedToUse) {
+        // gerar seed aleatória curta (hex) usando crypto quando disponível
+        try {
+          const arr = new Uint32Array(1);
+          window.crypto.getRandomValues(arr);
+          seedToUse = arr[0].toString(16);
+        } catch (e) {
+          seedToUse = String(Math.floor(Math.random() * 0xFFFFFFFF));
+        }
+        // persistir seed no cfg para permitir reprodução (não sobrescreve sharedState explicitamente)
+        cfg.seed = seedToUse;
+        try { localStorage.setItem('tabuleiroConfig', JSON.stringify(cfg)); } catch (e) { }
+      }
+
+      // build RNG
+      const rng = makeRngFromSeed(seedToUse);
+
+      // show seed in summary
+      configSummary.textContent = `${cfg.largura} x ${cfg.altura} — Itens: ${cfg.itens}, Exclusões: ${cfg.exclusoes} — Seed: ${seedToUse}`;
+
       const colors = { blue: '#2b6df6', red: '#e23e3e', gray: '#eee', black: '#111' };
-      const startIsBlue = Math.random() < 0.5;
+      const startIsBlue = rng() < 0.5;
       const startColorName = startIsBlue ? 'blue' : 'red';
       const startColor = startIsBlue ? colors.blue : colors.red;
       const otherColor = startIsBlue ? colors.red : colors.blue;
@@ -397,7 +484,7 @@
 
         // índices disponíveis
         let indices = Array.from({ length: totalCells }, (_, i) => i);
-        shuffle(indices);
+        shuffle(indices, rng);
 
         // pega posições para cor inicial
         const startIndices = indices.splice(0, startCount);
@@ -477,8 +564,18 @@
 
     // Botões
     regenerateBtn.addEventListener('click', () => {
-      // gera nova distribuição com a mesma config
-      makeGrid();
+      // gera nova seed aleatória e renderiza com ela
+      let newSeed;
+      try {
+        const arr = new Uint32Array(1);
+        window.crypto.getRandomValues(arr);
+        newSeed = arr[0].toString(16);
+      } catch (e) {
+        newSeed = String(Math.floor(Math.random() * 0xFFFFFFFF));
+      }
+      cfg.seed = newSeed;
+      try { localStorage.setItem('tabuleiroConfig', JSON.stringify(cfg)); } catch (e) { }
+      makeGrid(newSeed);
     });
 
     // Serializa o estado atual do tabuleiro e gera um link shareable (base64)
@@ -489,16 +586,11 @@
     }
 
     function collectBoardState() {
-      const children = Array.from(gridEl.children);
-      const cells = children.map(ch => ({
-        color: ch.dataset.color || 'gray',
-        hidden: ch.classList.contains('hidden'),
-        vazioEscuro: ch.classList.contains('vazio-escuro')
-      }));
+      // Para compartilhamento leve: compartilhar apenas a configuração (incluindo seed)
+      // Dessa forma, o receptor reconstroi o tabuleiro a partir de largura/altura/itens/exclusoes/seed
+      // em vez de transportar o estado explícito de cada célula.
       return {
-        cfg: cfg,
-        frameColor: frameEl.style.background || null,
-        cells
+        cfg: cfg
       };
     }
 
