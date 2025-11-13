@@ -279,7 +279,7 @@
     const raw = localStorage.getItem('tabuleiroConfig');
     if (!raw) {
       alert('Configuração não encontrada. Voltando para a página de configuração.');
-      window.location.href = 'index.html';
+      window.location.href = '/';
     }
     let cfg = JSON.parse(raw);
 
@@ -640,7 +640,8 @@
     function showShareModal(url) {
       // Use a public QR image generator (no external JS). If you need offline, we can embed a small QR encoder.
       const size = 240; // pixels
-      const encoded = encodeURIComponent(url);
+      console.log(url)
+      const encoded = url// encodeURIComponent(url);
       // Using goqr.me / api.qrserver.com for fast generation
       const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}`;
       qrImage.src = qrSrc;
@@ -682,7 +683,7 @@
     });
 
     backBtn.addEventListener('click', () => {
-      window.location.href = 'index.html';
+      window.location.href = '/';
     });
 
     // Primeiro render
