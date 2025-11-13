@@ -279,7 +279,7 @@
     const raw = localStorage.getItem('tabuleiroConfig');
     if (!raw) {
       alert('Configuração não encontrada. Voltando para a página de configuração.');
-      window.location.href = '/index';
+      window.location.href = 'index';
     }
     let cfg = JSON.parse(raw);
 
@@ -683,7 +683,7 @@
     });
 
     backBtn.addEventListener('click', () => {
-      window.location.href = '/index';
+      window.location.href = 'index';
     });
 
     // Primeiro render
