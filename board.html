@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tabuleiro Gerado</title>
+  <style>
+    :root {
+      --pad: 14px;
+      --bg: #f6f7fb;
+      --cell-size: calc((100vw - 60px) / 8);
+      /* will be clamped later by js */
+      --vazio-dark-overlay: rgba(0, 0, 0, 0.42);
+      --hidden-opacity: 0.28;
+      --vazio-hidden-opacity: 0.22;
+      --vazio-escuro-opacity: 0.08;
+      --transition-fast: 150ms;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto;
+      -webkit-font-smoothing: antialiased;
+      color: #111;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    button {
+      flex: 1;
+      padding: 12px;
+      font-size: 17px;
+      border-radius: 12px;
+      border: 0;
+      cursor: pointer;
+    }
+
+    button.primary {
+      background: #0077ff;
+      color: #fff;
+      box-shadow: 0 6px 14px rgba(0, 119, 255, 0.18);
+    }
+
+    button.ghost {
+      background: #fff;
+      border: 1px solid #ddd;
+    }
+
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .frame {
+      padding: 10px;
+      border-radius: 14px;
+      display: inline-block;
+      margin-top: 8px;
+      box-shadow: 0 8px 26px rgba(20, 20, 30, 0.08);
+      background: #fff;
+    }
+
+    .grid {
+      display: grid;
+      gap: 8px;
+      background: transparent;
+      border-radius: 10px;
+      padding: 8px;
+      background-clip: padding-box;
+    }
+
+    .square {
+      aspect-ratio: 1 / 1;
+      width: 48px;
+      border-radius: 10px;
+      background: #eee;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: white;
+      user-select: none;
+      cursor: pointer;
+      transition: transform var(--transition-fast) ease, box-shadow var(--transition-fast) ease, opacity 180ms ease, filter 180ms ease;
+      position: relative;
+      will-change: transform, opacity;
+      box-shadow: 0 2px 6px rgba(15, 15, 20, 0.04), inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+      overflow: hidden;
+    }
+
+    .square.hidden {
+      opacity: var(--hidden-opacity);
+      filter: brightness(0.65);
+      box-shadow: none;
+    }
+
+    .square.vazio.hidden {
+      opacity: var(--vazio-hidden-opacity);
+      filter: brightness(0.5);
+    }
+
+    /* Estado quando uma célula vazia (não colorida) é clicada: escurecer mais */
+    .square.vazio.vazio-escuro {
+      /* manter a opacidade do elemento para que o overlay seja totalmente visível */
+      opacity: .2;
+      /* força um brilho bem baixo para escurecer o conteúdo */
+      filter: brightness(0.18);
+      /* inset shadow overlay to darken the visible cell area (mais opaco) */
+      box-shadow: inset 0 0 0 9999px rgba(0, 0, 0, 0.56);
+      transition: box-shadow var(--transition-fast) ease, transform var(--transition-fast) ease, filter 180ms ease;
+    }
+
+    .info {
+      margin-top: 12px;
+      font-size: 14px;
+      color: #444;
+    }
+
+    @media (max-width:420px) {
+      .square {
+        width: 44px;
+        border-radius: 8px;
+      }
+
+      button {
+        padding: 12px;
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div>
+      <h1>Tabuleiro</h1>
+      <div style="font-size:13px;color:#666" id="configSummary"></div>
+    </div>
+    <div class="controls" style="max-width:460px;">
+      <button id="regenerate" class="primary">Gerar novamente</button>
+      <button id="back" class="ghost">Voltar</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="frame" class="frame">
+      <div id="grid" class="grid"></div>
+    </div>
+
+    <div class="info" id="infoText"></div>
+  </main>
+
+  <script>
+    // Recupera config
+    const raw = localStorage.getItem('tabuleiroConfig');
+    if (!raw) {
+      alert('Configuração não encontrada. Voltando para a página de configuração.');
+      window.location.href = 'index.html';
+    }
+    const cfg = JSON.parse(raw);
+    const gridEl = document.getElementById('grid');
+    const frameEl = document.getElementById('frame');
+    const configSummary = document.getElementById('configSummary');
+    const infoText = document.getElementById('infoText');
+    const regenerateBtn = document.getElementById('regenerate');
+    const backBtn = document.getElementById('back');
+
+    configSummary.textContent = `${cfg.largura} x ${cfg.altura} — Itens: ${cfg.itens}, Exclusões: ${cfg.exclusoes}`;
+
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function makeGrid() {
+      const width = cfg.largura;
+      const height = cfg.altura;
+      const totalCells = width * height;
+      gridEl.innerHTML = '';
+
+      // Decide cor inicial aleatória
+      const colors = { blue: '#2b6df6', red: '#e23e3e', gray: '#eee', black: '#111' };
+      const startIsBlue = Math.random() < 0.5;
+      const startColorName = startIsBlue ? 'blue' : 'red';
+      const startColor = startIsBlue ? colors.blue : colors.red;
+      const otherColor = startIsBlue ? colors.red : colors.blue;
+
+      // Aplica "borda" ao redor do tabuleiro (frame)
+      frameEl.style.background = startColor;
+      frameEl.style.padding = '10px'; // já definido; cria borda com cor
+      // grid contém uma pequena área branca por dentro => simula borda colorida
+      gridEl.style.background = '#fff';
+      gridEl.style.borderRadius = '10px';
+      gridEl.style.padding = '8px';
+
+      // Ajusta tamanho das colunas conforme largura/viewport
+      // calcula tamanho máximo que caiba no viewport (mobile-friendly)
+      const maxWidth = Math.min(window.innerWidth - 40, 680); // padding
+      const cellGap = 8;
+      const size = Math.floor((maxWidth - (width - 1) * cellGap - 16) / width);
+      const cellSize = Math.max(36, Math.min(72, size)); // clamp
+      // define grid template
+      gridEl.style.gridTemplateColumns = `repeat(${width}, ${cellSize}px)`;
+
+      // preenche células
+      const cells = [];
+      for (let i = 0; i < totalCells; i++) {
+        const d = document.createElement('div');
+        d.className = 'square';
+        d.style.width = cellSize + 'px';
+        d.style.borderRadius = Math.max(6, cellSize * 0.12) + 'px';
+        d.style.background = '#eee';
+        d.dataset.index = i;
+
+        // Adiciona evento de clique para ocultar/mostrar
+        // - Células coloridas continuam alternando a classe 'hidden'
+        // - Células vazias (não coloridas) alternam a classe 'vazio-escuro' para escurecer mais
+        d.addEventListener('click', function () {
+          if (this.classList.contains('vazio')) {
+            this.classList.toggle('vazio-escuro');
+            // remove 'hidden' se presente para evitar estados conflitantes
+            this.classList.remove('hidden');
+          } else {
+            this.classList.toggle('hidden');
+            // garantir que não reste a classe de vazio escuro
+            this.classList.remove('vazio-escuro');
+          }
+        });
+
+        gridEl.appendChild(d);
+        cells.push(d);
+      }
+
+      // cálculo de distribuição de cores entre itens
+      const itens = cfg.itens;
+      const exclusoes = cfg.exclusoes;
+      // startColor recebe vantagem em ímpar
+      const startCount = Math.ceil(itens / 2);
+      const otherCount = Math.floor(itens / 2);
+
+      // índices disponíveis
+      let indices = Array.from({ length: totalCells }, (_, i) => i);
+      shuffle(indices);
+
+      // pega posições para cor inicial
+      const startIndices = indices.splice(0, startCount);
+      // pega posições para outra cor
+      const otherIndices = indices.splice(0, otherCount);
+
+      // pinta as cores
+      startIndices.forEach(i => {
+        cells[i].style.background = startColor;
+        cells[i].dataset.color = startColorName;
+      });
+      otherIndices.forEach(i => {
+        cells[i].style.background = otherColor;
+        cells[i].dataset.color = startIsBlue ? 'red' : 'blue';
+      });
+
+      // agora pega exclusões a partir dos índices restantes (que não foram coloridos)
+      // indices array ainda contém os remanescentes (por causa dos splice acima)
+      if (exclusoes > 0) {
+        // garantia: itens + exclusoes <= totalCells por validação anterior
+        const exclIndices = indices.splice(0, exclusoes);
+        exclIndices.forEach(i => {
+          cells[i].style.background = colors.black;
+          cells[i].dataset.color = 'black';
+        });
+      }
+
+      // As células restantes (se houver) ficam cinza e são marcadas como vazias
+      indices.forEach(i => {
+        cells[i].style.background = colors.gray;
+        cells[i].dataset.color = 'gray';
+        cells[i].classList.add('vazio');
+      });
+
+      // info textual
+      infoText.innerHTML = `
+      Cor inicial: <strong style="color:${startColor};">${startColorName.toUpperCase()}</strong>.
+      Itens: ${itens} ( ${startColorName}=${startCount}, ${startIsBlue ? 'red' : 'blue'}=${otherCount} ).
+      Exclusões (pretos): ${exclusoes}.
+      <br><small>Clique nos quadrados para ocultar/mostrar</small>
+    `;
+
+      // Para acessibilidade: torna as células táteis com border small shadow
+      cells.forEach(c => {
+        c.style.boxShadow = 'inset 0 -2px 0 rgba(0,0,0,0.04)';
+      });
+    }
+
+    // Botões
+    regenerateBtn.addEventListener('click', () => {
+      // gera nova distribuição com a mesma config
+      makeGrid();
+    });
+
+    backBtn.addEventListener('click', () => {
+      window.location.href = 'index.html';
+    });
+
+    // Primeiro render
+    makeGrid();
+
+    // Re-render on orientation/resize to adjust cell sizes
+    let rTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(rTimer);
+      rTimer = setTimeout(() => makeGrid(), 120);
+    });
+  </script>
+</body>
+
+</html>
