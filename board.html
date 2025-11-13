@@ -196,6 +196,10 @@
     <div class="controls" style="max-width:460px;">
       <button id="regenerate" class="primary">Gerar novamente</button>
       <button id="back" class="ghost">Voltar</button>
+      <button id="shareBtn" class="ghost" title="Compartilhar tabuleiro"
+        style="margin-left:6px;padding:8px 10px;font-size:13px;border-radius:10px;flex:0 0 auto;min-width:92px">
+        <img src="./icons/sharing.svg" alt="Compartilhar" style="width:18px;height:18px;vertical-align:middle;">
+      </button>
     </div>
   </header>
 
@@ -207,6 +211,33 @@
     <div class="info" id="infoText"></div>
   </main>
 
+  <!-- Share modal -->
+  <div id="shareModal" aria-hidden="true" style="display:none">
+    <div id="modalBackdrop"
+      style="position:fixed;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px);z-index:1200;display:flex;align-items:center;justify-content:center;padding:20px">
+      <div id="modalDialog" role="dialog" aria-modal="true"
+        style="background:var(--bg);border-radius:12px;padding:18px;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(10,10,20,0.4);text-align:center;color:inherit">
+        <button id="modalClose" aria-label="Fechar"
+          style="position:absolute;right:18px;top:18px;border:0;background:transparent;font-size:18px;cursor:pointer;color:inherit">✕</button>
+        <div style="margin-top:4px;margin-bottom:8px;font-weight:600">Compartilhar tabuleiro</div>
+        <div id="qrContainer"
+          style="width:260px;height:260px;margin:8px auto;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#fff;padding:8px">
+          <!-- QR image will be inserted here -->
+          <img id="qrImage" alt="QR code" style="max-width:100%;height:auto;display:block;border-radius:6px">
+        </div>
+        <div id="shareUrlBox"
+          style="max-width:260px;margin:8px auto;overflow:hidden;border-radius:10px;background:rgba(0,0,0,0.04);padding:8px">
+          <a id="shareUrlText" href="#" target="_blank" rel="noopener"
+            style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:inherit;text-decoration:none">link</a>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
+          <button id="copyLinkBtn" class="primary" style="padding:8px 12px;border-radius:8px">Copiar link</button>
+          <button id="closeBtn" class="ghost" style="padding:8px 12px;border-radius:8px">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     // Recupera config
     const raw = localStorage.getItem('tabuleiroConfig');
@@ -214,13 +245,41 @@
       alert('Configuração não encontrada. Voltando para a página de configuração.');
       window.location.href = 'index.html';
     }
-    const cfg = JSON.parse(raw);
+    let cfg = JSON.parse(raw);
+
+    // lê parâmetro de share (se vier via URL ?share=<base64>) e aplica como estado compartilhado
+    function getQueryParam(name) {
+      const url = window.location.search.substring(1);
+      const params = new URLSearchParams(url);
+      return params.get(name);
+    }
+
+    function b64DecodeUnicode(str) {
+      // decode base64 handling unicode
+      try {
+        return decodeURIComponent(Array.prototype.map.call(atob(str), function (c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+      } catch (e) { return null }
+    }
+
+    const sharedParam = getQueryParam('share');
+    let sharedState = null;
+    if (sharedParam) {
+      try {
+        const txt = b64DecodeUnicode(sharedParam);
+        if (txt) sharedState = JSON.parse(txt);
+        // if shared contains cfg, override local cfg for rendering
+        if (sharedState && sharedState.cfg) { cfg = sharedState.cfg; }
+      } catch (e) { sharedState = null; }
+    }
     const gridEl = document.getElementById('grid');
     const frameEl = document.getElementById('frame');
     const configSummary = document.getElementById('configSummary');
     const infoText = document.getElementById('infoText');
     const regenerateBtn = document.getElementById('regenerate');
     const backBtn = document.getElementById('back');
+    const shareBtn = document.getElementById('shareBtn');
 
     configSummary.textContent = `${cfg.largura} x ${cfg.altura} — Itens: ${cfg.itens}, Exclusões: ${cfg.exclusoes}`;
 
@@ -298,49 +357,81 @@
         cells.push(d);
       }
 
-      // cálculo de distribuição de cores entre itens
-      const itens = cfg.itens;
-      const exclusoes = cfg.exclusoes;
-      // startColor recebe vantagem em ímpar
-      const startCount = Math.ceil(itens / 2);
-      const otherCount = Math.floor(itens / 2);
+      // se veio um estado compartilhado via URL, renderizamos exatamente esse estado
+      if (sharedState && Array.isArray(sharedState.cells) && sharedState.cells.length === totalCells) {
+        // usar frame color se fornecido
+        if (sharedState.frameColor) frameEl.style.background = sharedState.frameColor;
 
-      // índices disponíveis
-      let indices = Array.from({ length: totalCells }, (_, i) => i);
-      shuffle(indices);
+        sharedState.cells.forEach((cState, i) => {
+          const el = cells[i];
+          if (!el) return;
+          // cor: cState.color é string como 'blue'|'red'|'black'|'gray' OR hex
+          if (cState.color === 'gray' || cState.color === 'grey' || !cState.color) {
+            el.style.background = colors.gray;
+            el.dataset.color = 'gray';
+            el.classList.add('vazio');
+          } else if (cState.color === 'black') {
+            el.style.background = colors.black;
+            el.dataset.color = 'black';
+          } else if (cState.color === 'red') {
+            el.style.background = colors.red;
+            el.dataset.color = 'red';
+          } else if (cState.color === 'blue') {
+            el.style.background = colors.blue;
+            el.dataset.color = 'blue';
+          } else if (/^#/i.test(cState.color)) {
+            el.style.background = cState.color;
+            el.dataset.color = cState.color;
+          }
 
-      // pega posições para cor inicial
-      const startIndices = indices.splice(0, startCount);
-      // pega posições para outra cor
-      const otherIndices = indices.splice(0, otherCount);
+          if (cState.hidden) el.classList.add('hidden');
+          if (cState.vazioEscuro) el.classList.add('vazio-escuro');
+        });
+      } else {
+        // cálculo de distribuição de cores entre itens
+        const itens = cfg.itens;
+        const exclusoes = cfg.exclusoes;
+        // startColor recebe vantagem em ímpar
+        const startCount = Math.ceil(itens / 2);
+        const otherCount = Math.floor(itens / 2);
 
-      // pinta as cores
-      startIndices.forEach(i => {
-        cells[i].style.background = startColor;
-        cells[i].dataset.color = startColorName;
-      });
-      otherIndices.forEach(i => {
-        cells[i].style.background = otherColor;
-        cells[i].dataset.color = startIsBlue ? 'red' : 'blue';
-      });
+        // índices disponíveis
+        let indices = Array.from({ length: totalCells }, (_, i) => i);
+        shuffle(indices);
 
-      // agora pega exclusões a partir dos índices restantes (que não foram coloridos)
-      // indices array ainda contém os remanescentes (por causa dos splice acima)
-      if (exclusoes > 0) {
-        // garantia: itens + exclusoes <= totalCells por validação anterior
-        const exclIndices = indices.splice(0, exclusoes);
-        exclIndices.forEach(i => {
-          cells[i].style.background = colors.black;
-          cells[i].dataset.color = 'black';
+        // pega posições para cor inicial
+        const startIndices = indices.splice(0, startCount);
+        // pega posições para outra cor
+        const otherIndices = indices.splice(0, otherCount);
+
+        // pinta as cores
+        startIndices.forEach(i => {
+          cells[i].style.background = startColor;
+          cells[i].dataset.color = startColorName;
+        });
+        otherIndices.forEach(i => {
+          cells[i].style.background = otherColor;
+          cells[i].dataset.color = startIsBlue ? 'red' : 'blue';
+        });
+
+        // agora pega exclusões a partir dos índices restantes (que não foram coloridos)
+        // indices array ainda contém os remanescentes (por causa dos splice acima)
+        if (exclusoes > 0) {
+          // garantia: itens + exclusoes <= totalCells por validação anterior
+          const exclIndices = indices.splice(0, exclusoes);
+          exclIndices.forEach(i => {
+            cells[i].style.background = colors.black;
+            cells[i].dataset.color = 'black';
+          });
+        }
+
+        // As células restantes (se houver) ficam cinza e são marcadas como vazias
+        indices.forEach(i => {
+          cells[i].style.background = colors.gray;
+          cells[i].dataset.color = 'gray';
+          cells[i].classList.add('vazio');
         });
       }
-
-      // As células restantes (se houver) ficam cinza e são marcadas como vazias
-      indices.forEach(i => {
-        cells[i].style.background = colors.gray;
-        cells[i].dataset.color = 'gray';
-        cells[i].classList.add('vazio');
-      });
 
       // Inserir ícones centrais para células coloridas
       const iconMap = { blue: 'circle.svg', red: 'cross.svg', black: 'triangle.svg' };
@@ -348,26 +439,35 @@
         const col = c.dataset.color;
         // apenas para cores com ícone mapeado (não para 'gray')
         if (iconMap[col]) {
-          const img = document.createElement('img');
-          img.src = `./icons/${iconMap[col]}`;
-          img.alt = col + ' icon';
-          img.style.width = '52%';
-          img.style.height = '52%';
-          img.style.color = '#fff';
-          img.style.objectFit = 'contain';
-          img.style.pointerEvents = 'none';
-          // forçar que a imagem apareça branca (icons svg already white)
-          c.appendChild(img);
+          // evite duplicar ícones em re-renders
+          if (!c.querySelector('img')) {
+            const img = document.createElement('img');
+            img.src = `./icons/${iconMap[col]}`;
+            img.alt = col + ' icon';
+            img.style.width = '52%';
+            img.style.height = '52%';
+            img.style.objectFit = 'contain';
+            img.style.pointerEvents = 'none';
+            c.appendChild(img);
+          }
+        } else {
+          // remover possível img em células vazias
+          const existing = c.querySelector('img');
+          if (existing) existing.remove();
         }
       });
 
       // info textual
-      infoText.innerHTML = `
+      if (sharedState) {
+        infoText.innerHTML = `Estado compartilhado — Itens: ${cfg.itens}, Exclusões: ${cfg.exclusoes}.<br><small>Clique nos quadrados para ocultar/mostrar</small>`;
+      } else {
+        infoText.innerHTML = `
       Cor inicial: <strong style="color:${startColor};">${startColorName.toUpperCase()}</strong>.
       Itens: ${itens} ( ${startColorName}=${startCount}, ${startIsBlue ? 'red' : 'blue'}=${otherCount} ).
       Exclusões (pretos): ${exclusoes}.
       <br><small>Clique nos quadrados para ocultar/mostrar</small>
     `;
+      }
 
       // Para acessibilidade: torna as células táteis com border small shadow
       cells.forEach(c => {
@@ -379,6 +479,114 @@
     regenerateBtn.addEventListener('click', () => {
       // gera nova distribuição com a mesma config
       makeGrid();
+    });
+
+    // Serializa o estado atual do tabuleiro e gera um link shareable (base64)
+    function b64EncodeUnicode(str) {
+      return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function (match, p1) {
+        return String.fromCharCode('0x' + p1);
+      }));
+    }
+
+    function collectBoardState() {
+      const children = Array.from(gridEl.children);
+      const cells = children.map(ch => ({
+        color: ch.dataset.color || 'gray',
+        hidden: ch.classList.contains('hidden'),
+        vazioEscuro: ch.classList.contains('vazio-escuro')
+      }));
+      return {
+        cfg: cfg,
+        frameColor: frameEl.style.background || null,
+        cells
+      };
+    }
+
+    async function shareBoard() {
+      try {
+        const payload = collectBoardState();
+        const txt = JSON.stringify(payload);
+        const b64 = b64EncodeUnicode(txt);
+        const shareUrl = `${location.origin}${location.pathname}?share=${b64}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(shareUrl);
+          alert('Link copiado para a área de transferência!');
+        } else {
+          prompt('Copie este link:', shareUrl);
+        }
+      } catch (e) {
+        alert('Erro ao gerar link de compartilhamento.');
+      }
+    }
+
+    if (shareBtn) {
+      shareBtn.addEventListener('click', async () => {
+        // build share URL then show modal with QR + link
+        try {
+          const payload = collectBoardState();
+          const txt = JSON.stringify(payload);
+          const b64 = b64EncodeUnicode(txt);
+          const shareUrl = `${location.origin}${location.pathname}?share=${b64}`;
+          showShareModal(shareUrl);
+        } catch (e) {
+          // fallback to previous behavior
+          shareBoard();
+        }
+      });
+    }
+
+    // Modal helpers
+    const shareModal = document.getElementById('shareModal');
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const modalDialog = document.getElementById('modalDialog');
+    const qrImage = document.getElementById('qrImage');
+    const shareUrlText = document.getElementById('shareUrlText');
+    const copyLinkBtn = document.getElementById('copyLinkBtn');
+    const closeBtn = document.getElementById('closeBtn');
+    const modalClose = document.getElementById('modalClose');
+
+    function showShareModal(url) {
+      // Use a public QR image generator (no external JS). If you need offline, we can embed a small QR encoder.
+      const size = 240; // pixels
+      const encoded = encodeURIComponent(url);
+      // Using goqr.me / api.qrserver.com for fast generation
+      const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}`;
+      qrImage.src = qrSrc;
+      shareUrlText.textContent = url;
+      shareUrlText.href = url;
+      // show modal
+      shareModal.style.display = 'block';
+      shareModal.setAttribute('aria-hidden', 'false');
+      // focus
+      copyLinkBtn.focus();
+      // prevent background scroll
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeShareModal() {
+      shareModal.style.display = 'none';
+      shareModal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    }
+
+    // close handlers
+    modalBackdrop.addEventListener('click', (ev) => {
+      if (ev.target === modalBackdrop) closeShareModal();
+    });
+    closeBtn.addEventListener('click', closeShareModal);
+    modalClose.addEventListener('click', closeShareModal);
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && shareModal.style.display === 'block') closeShareModal();
+    });
+
+    copyLinkBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(shareUrlText.textContent);
+        copyLinkBtn.textContent = 'Copiado!';
+        setTimeout(() => (copyLinkBtn.textContent = 'Copiar link'), 1400);
+      } catch (e) {
+        prompt('Copie o link abaixo', shareUrlText.textContent);
+      }
     });
 
     backBtn.addEventListener('click', () => {
