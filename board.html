@@ -153,6 +153,36 @@
         font-size: 16px;
       }
     }
+
+    /* Dark mode overrides */
+    body.dark {
+      background: #07101a;
+      color: #e6eef8
+    }
+
+    body.dark .frame,
+    body.dark .card {
+      background: #0b1622;
+      color: #e6eef8
+    }
+
+    body.dark .square {
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    }
+
+    body.dark .square.vazio {
+      background: #1a2430
+    }
+
+    body.dark .info {
+      color: #c8d9ee
+    }
+
+    body.dark .controls button.ghost {
+      background: #0b1622;
+      color: #e6eef8;
+      border-color: #233447
+    }
   </style>
 </head>
 
@@ -192,6 +222,13 @@
     const backBtn = document.getElementById('back');
 
     configSummary.textContent = `${cfg.largura} x ${cfg.altura} — Itens: ${cfg.itens}, Exclusões: ${cfg.exclusoes}`;
+
+    (function () {
+      try {
+        const saved = localStorage.getItem('siteTheme');
+        if (saved === 'dark') document.body.classList.add('dark');
+      } catch (e) { }
+    })();
 
     function shuffle(arr) {
       for (let i = arr.length - 1; i > 0; i--) {
@@ -302,6 +339,25 @@
         cells[i].style.background = colors.gray;
         cells[i].dataset.color = 'gray';
         cells[i].classList.add('vazio');
+      });
+
+      // Inserir ícones centrais para células coloridas
+      const iconMap = { blue: 'circle.svg', red: 'cross.svg', black: 'triangle.svg' };
+      cells.forEach((c) => {
+        const col = c.dataset.color;
+        // apenas para cores com ícone mapeado (não para 'gray')
+        if (iconMap[col]) {
+          const img = document.createElement('img');
+          img.src = `./icons/${iconMap[col]}`;
+          img.alt = col + ' icon';
+          img.style.width = '52%';
+          img.style.height = '52%';
+          img.style.color = '#fff';
+          img.style.objectFit = 'contain';
+          img.style.pointerEvents = 'none';
+          // forçar que a imagem apareça branca (icons svg already white)
+          c.appendChild(img);
+        }
       });
 
       // info textual
