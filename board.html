@@ -138,6 +138,16 @@
       color: #444;
     }
 
+    .seed-text {
+      cursor: pointer;
+      text-decoration: underline;
+      transition: opacity 120ms ease, color 120ms ease;
+    }
+
+    .seed-text:hover {
+      opacity: 0.9;
+    }
+
     /* Blur toggle styles: apply blur/overlay to the inner grid so the colored frame border stays visible */
     #grid.blurred {
       position: relative;
@@ -246,6 +256,10 @@
 
     body.dark .info {
       color: #c8d9ee
+    }
+
+    .seed-text {
+      color: #666;
     }
 
     /* Share modal theming (uses CSS variables so dark mode can override) */
@@ -571,8 +585,31 @@
       // build RNG
       const rng = makeRngFromSeed(seedToUse);
 
-      // show seed in summary
-      configSummary.textContent = `${cfg.largura} x ${cfg.altura} — Itens: ${cfg.itens}, Exclusões: ${cfg.exclusoes} — Seed: ${seedToUse}`;
+      // show seed in summary (clickable)
+      configSummary.innerHTML = `${cfg.largura} x ${cfg.altura} — Itens: ${cfg.itens}, Exclusões: ${cfg.exclusoes} — Seed: <span id="seedText" class="seed-text">${seedToUse}</span>`;
+      // clicking seed copies it to clipboard (feedback)
+      try {
+        const seedEl = document.getElementById('seedText');
+        if (seedEl) {
+          seedEl.addEventListener('click', async () => {
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(seedToUse);
+              } else {
+                // fallback
+                const ok = document.execCommand && document.execCommand('copy');
+                if (!ok) throw new Error('clipboard not available');
+              }
+              const old = seedEl.textContent;
+              seedEl.textContent = 'Copiado!';
+              setTimeout(() => (seedEl.textContent = old), 1200);
+            } catch (e) {
+              // final fallback: prompt with seed
+              prompt('Copie a seed abaixo:', seedToUse);
+            }
+          });
+        }
+      } catch (e) { }
 
       const colors = { blue: '#2b6df6', red: '#e23e3e', gray: '#eee', black: '#111' };
       const startIsBlue = rng() < 0.5;
@@ -832,7 +869,6 @@
     function showShareModal(url) {
       // Use a public QR image generator (no external JS). If you need offline, we can embed a small QR encoder.
       const size = 240; // pixels
-      console.log(url)
       const encoded = url// encodeURIComponent(url);
       // Using goqr.me / api.qrserver.com for fast generation
       const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}`;

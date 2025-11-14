@@ -63,6 +63,26 @@
       box-sizing: border-box;
     }
 
+    /* Seed input styling (theme-aware) — match selects/inputs border and subtler placeholder */
+    #seedInput,
+    .seed-input {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border-radius: 10px;
+      border: 1px solid #223049;
+      /* same as select */
+      box-sizing: border-box;
+      background: #fff;
+      color: #111;
+    }
+
+    /* more transparent placeholder to be less prominent */
+    #seedInput::placeholder,
+    .seed-input::placeholder {
+      color: rgba(17, 17, 17, 0.36);
+    }
+
     .col {
       flex: 1;
     }
@@ -199,6 +219,50 @@
       border-color: #223049
     }
 
+    /* Unified focus styles for selects/inputs so seedInput matches other controls */
+    select:focus,
+    #seedInput:focus,
+    .seed-input:focus,
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #2b6df6;
+      /* subtle blue highlight */
+      box-shadow: 0 6px 18px rgba(43, 109, 246, 0.12);
+    }
+
+    /* Better accessibility: show a clear focus ring when using keyboard */
+    select:focus-visible,
+    #seedInput:focus-visible,
+    .seed-input:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible {
+      outline: none;
+      border-color: #2b6df6;
+      box-shadow: 0 6px 20px rgba(43, 109, 246, 0.18);
+    }
+
+    body.dark select:focus,
+    body.dark #seedInput:focus,
+    body.dark .seed-input:focus,
+    body.dark input:focus,
+    body.dark textarea:focus {
+      border-color: #4b9bff;
+      box-shadow: 0 8px 22px rgba(75, 155, 255, 0.12);
+    }
+
+    body.dark #seedInput,
+    body.dark .seed-input {
+      background: #0b1220;
+      color: #e6eef8;
+      border-color: #223049;
+    }
+
+    body.dark #seedInput::placeholder,
+    body.dark .seed-input::placeholder {
+      color: rgba(230, 238, 248, 0.34);
+    }
+
     body.dark .hint {
       color: #9fb0d0
     }
@@ -235,7 +299,7 @@
         </button>
       </div>
     </div>
-    <div class="hint">Configure a grade e gere o tabuleiro — pensado para celular</div>
+    <div class="hint">Configure a grade e gere o tabuleiro</div>
   </header>
 
   <main>
@@ -274,6 +338,12 @@
           <label style="font-size:13px;margin-bottom:6px;display:block">Exemplo do grid</label>
           <div id="previewGrid" class="preview-grid"></div>
         </div>
+      </div>
+
+      <div style="margin-top:10px">
+        <label for="seedInput" style="display:block;font-size:13px;margin-bottom:6px">Seed (opcional)</label>
+        <input id="seedInput" placeholder="Cole uma seed ou deixe em branco para aleatória"
+          style="width:100%;padding:12px;font-size:16px;border-radius:10px;border:1px solid #223049;box-sizing:border-box">
       </div>
 
       <div class="controls" style="margin-top:14px;">
@@ -416,12 +486,18 @@
         itens: +itensSel.value,
         exclusoes: +exclSel.value
       };
+      // attach optional seed
+      const seedInput = document.getElementById('seedInput');
+      if (seedInput) {
+        const s = seedInput.value.trim();
+        if (s) config.seed = s;
+      }
       if (config.itens + config.exclusoes > config.largura * config.altura) {
         alert('Erro: total maior que capacidade.');
         return;
       }
       localStorage.setItem('tabuleiroConfig', JSON.stringify(config));
-      window.location.href = 'board';
+      window.location.href = 'board.html';
     });
 
     limparBtn.addEventListener('click', () => {
@@ -438,7 +514,7 @@
     // Theme (dark mode) handling: persist in localStorage and apply class on body
     (function () {
       try {
-        const saved = localStorage.getItem('siteTheme');
+        const saved = localStorage.getItem('siteTheme') || 'dark';
         if (saved === 'dark') document.body.classList.add('dark');
       } catch (e) {/* ignore */ }
     })();
