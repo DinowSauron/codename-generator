@@ -19,11 +19,6 @@
       --transition-fast: 150ms;
     }
 
-    html,
-    body {
-      height: 100%;
-    }
-
     body {
       margin: 0;
       padding: 16px;
@@ -143,6 +138,75 @@
       color: #444;
     }
 
+    /* Blur toggle styles: apply blur/overlay to the inner grid so the colored frame border stays visible */
+    #grid.blurred {
+      position: relative;
+      filter: blur(35px) saturate(0.2);
+      opacity: 0.8;
+      pointer-events: none;
+      /* prevent interaction while blurred */
+    }
+
+    #grid.blurred::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 10px;
+      /* matches grid radius */
+      background: rgba(0, 0, 0, 0.6);
+      pointer-events: none;
+    }
+
+    /* Button active visual */
+    button.active.blur-on {
+      background: #111;
+      color: #fff;
+      box-shadow: none;
+    }
+
+    /* Fancy blur button */
+    #blurToggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: linear-gradient(180deg, #fff, #f2f6ff);
+      color: #111;
+      border-radius: 12px;
+      border: 1px solid rgba(16, 24, 40, 0.06);
+      box-shadow: 0 8px 20px rgba(25, 40, 80, 0.06);
+      transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, color 160ms ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    #blurToggle .btn-icon {
+      display: inline-flex;
+      width: 18px;
+      height: 18px;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.95;
+    }
+
+    #blurToggle .btn-label {
+      font-size: 15px;
+      line-height: 1;
+      font-weight: 600;
+    }
+
+    #blurToggle:active {
+      box-shadow: 0 6px 16px rgba(25, 40, 80, 0.06);
+    }
+
+    body.dark #blurToggle {
+      background: linear-gradient(180deg, #0f1724, #0b1220);
+      color: #e6eef8;
+      border-color: rgba(255, 255, 255, 0.04);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.48);
+    }
+
     @media (max-width:420px) {
       .square {
         width: 44px;
@@ -219,6 +283,46 @@
       color: #e6eef8;
       border-color: #233447
     }
+
+
+    .credits {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100vw;
+
+      color: #000;
+      /* default (light mode) */
+      font-size: 14px;
+      margin-bottom: 0.5rem;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+
+    }
+
+    .credits p {
+      margin: 0;
+    }
+
+    .credits a {
+      color: #9aade4;
+    }
+
+    .credits a&:hover {
+      opacity: .72;
+    }
+
+    /* credits in dark mode */
+    body.dark .credits {
+      color: #c8d9ee
+    }
+
+    body.dark .credits a {
+      color: #7fa1e8
+    }
   </style>
 </head>
 
@@ -226,22 +330,41 @@
   <header>
     <div>
       <h1>Tabuleiro</h1>
-      <div style="font-size:13px;color:#666" id="configSummary"></div>
     </div>
     <div class="controls" style="max-width:460px;">
       <button id="regenerate" class="primary">Gerar novamente</button>
       <button id="back" class="ghost">Voltar</button>
       <button id="shareBtn" class="ghost" title="Compartilhar tabuleiro"
-        style="margin-left:6px;padding:8px 10px;font-size:13px;border-radius:10px;flex:0 0 auto;min-width:92px">
+        style="margin-left:6px;padding:4px 10px;font-size:13px;border-radius:10px;flex:0 0 auto;min-width:64px">
         <img class="share-icon" src="./icons/sharing.svg" alt="Compartilhar"
           style="width:18px;height:18px;vertical-align:middle;">
+      </button>
+      <button id="themeToggle" class="ghost" title="Alternar tema"
+        style="margin-left:6px;padding:4px 4px;font-size:17px;border-radius:12px;display:flex;align-items:center;justify-content:center;max-width:64px;">
       </button>
     </div>
   </header>
 
+  <!-- full-width summary below header (covers entire width) -->
+  <div id="configSummary" style="font-size:13px;color:#666;margin:6px 0 10px 0;">
+  </div>
+
   <main>
     <div id="frame" class="frame">
       <div id="grid" class="grid"></div>
+    </div>
+
+    <div style="margin-top:10px;text-align:center">
+      <button id="blurToggle" class="ghost"
+        style="min-width:200px;padding:10px 14px;border-radius:10px;margin-top:32px">
+        <span class="btn-icon">
+          <!-- eye icon -->
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <path d="M12 5C5 5 1 12 1 12s4 7 11 7 11-7 11-7-4-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z" />
+          </svg>
+        </span>
+        <span class="btn-label">Borrar tabuleiro</span>
+      </button>
     </div>
 
     <div class="info" id="infoText"></div>
@@ -271,8 +394,30 @@
           <button id="closeBtn" class="ghost" style="padding:8px 12px;border-radius:8px">Fechar</button>
         </div>
       </div>
+
     </div>
   </div>
+
+
+  <section style="text-align:center; font-size:13px; color:var(--muted)">
+    <footer class="credits">
+      <p>Luiz Claudio</p>
+      <p>•</p>
+      <a href="http://luizclaudio.dev.br/" target="_blank" rel="noreferrer">
+        Portfólio
+      </a>
+      <a href="https://github.com/DinowSauron" target="_blank" rel="noreferrer">
+        Github
+      </a>
+      <a href="https://www.linkedin.com/in/luiz-claudio-cardoso/" target="_blank" rel="noreferrer">
+        Linkedin
+      </a>
+      <p>•</p>
+      <a href="https://github.com/DinowSauron/codename-generator" target="_blank" rel="noreferrer">
+        Código Fonte
+      </a>
+    </footer>
+  </section>
 
   <script>
     // Recupera config
@@ -327,6 +472,28 @@
       } catch (e) { }
     })();
 
+    // Theme toggle: use same icon behavior as index.html (external SVGs)
+    const themeToggleBtn = document.getElementById('themeToggle');
+    const moonSVG = './icons/moon.svg';
+    const sunSVG = './icons/sun.svg';
+
+    function updateThemeIcon(isDark) {
+      if (!themeToggleBtn) return;
+      const path = isDark ? sunSVG : moonSVG;
+      themeToggleBtn.innerHTML = `<img src="${path}" alt="tema" style="width:18px;height:18px;display:block;">`;
+    }
+
+    // initialize based on stored/theme class
+    updateThemeIcon(document.body.classList.contains('dark'));
+
+    if (themeToggleBtn) {
+      themeToggleBtn.addEventListener('click', () => {
+        const isDark = document.body.classList.toggle('dark');
+        try { localStorage.setItem('siteTheme', isDark ? 'dark' : 'light'); } catch (e) { }
+        updateThemeIcon(isDark);
+      });
+    }
+
     // small fast hash to convert a string into a 32-bit number (xfnv1a)
     function xfnv1a(str) {
       let h = 2166136261 >>> 0;
@@ -352,6 +519,16 @@
       // seed may be a number or string
       const s = (typeof seed === 'number') ? seed : xfnv1a(String(seed));
       return mulberry32(s);
+    }
+
+    // helper: convert hex color to rgba() string
+    function hexToRgba(hex, alpha = 1) {
+      if (!hex) return `rgba(0,0,0,${alpha})`;
+      const m = hex.replace('#','');
+      const r = parseInt(m.substring(0,2),16);
+      const g = parseInt(m.substring(2,4),16);
+      const b = parseInt(m.substring(4,6),16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
     // Fisher-Yates shuffle but using a provided rng function
@@ -397,6 +574,16 @@
       const startColorName = startIsBlue ? 'blue' : 'red';
       const startColor = startIsBlue ? colors.blue : colors.red;
       const otherColor = startIsBlue ? colors.red : colors.blue;
+
+      // Color the blur button border to match the starting color (keeps frame visible)
+      try {
+        const blurBtn = document.getElementById('blurToggle');
+        if (blurBtn) {
+          blurBtn.style.borderColor = startColor;
+          // set icon/text color and a soft colored shadow
+          blurBtn.style.boxShadow = `0 8px 20px ${hexToRgba(startColor, 0.10)}`;
+        }
+      } catch (e) { }
 
       // Aplica "borda" ao redor do tabuleiro (frame)
       frameEl.style.background = startColor;
@@ -683,8 +870,25 @@
     });
 
     backBtn.addEventListener('click', () => {
-      window.location.href = 'index';
+      window.location.href = 'index.html';
     });
+
+    // Blur toggle button: aplica/Remove uma camada forte de blur + overlay no #grid
+    const blurToggle = document.getElementById('blurToggle');
+    if (blurToggle) {
+      function updateBlurState() {
+        const on = gridEl.classList.contains('blurred');
+        const labelEl = blurToggle.querySelector('.btn-label');
+        if (labelEl) labelEl.textContent = on ? 'Mostrar tabuleiro' : 'Borrar tabuleiro';
+        if (on) blurToggle.classList.add('active', 'blur-on'); else blurToggle.classList.remove('active', 'blur-on');
+      }
+      blurToggle.addEventListener('click', () => {
+        gridEl.classList.toggle('blurred');
+        updateBlurState();
+      });
+      // estado inicial
+      updateBlurState();
+    }
 
     // Primeiro render
     makeGrid();
