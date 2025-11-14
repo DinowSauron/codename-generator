@@ -217,6 +217,11 @@
         padding: 12px;
         font-size: 16px;
       }
+
+      /* hide title/brand on small screens to save horizontal space */
+      header .brand {
+        display: none;
+      }
     }
 
     /* Dark mode overrides */
@@ -328,7 +333,7 @@
 
 <body>
   <header>
-    <div>
+    <div class="brand">
       <h1>Tabuleiro</h1>
     </div>
     <div class="controls" style="max-width:460px;">
@@ -524,10 +529,10 @@
     // helper: convert hex color to rgba() string
     function hexToRgba(hex, alpha = 1) {
       if (!hex) return `rgba(0,0,0,${alpha})`;
-      const m = hex.replace('#','');
-      const r = parseInt(m.substring(0,2),16);
-      const g = parseInt(m.substring(2,4),16);
-      const b = parseInt(m.substring(4,6),16);
+      const m = hex.replace('#', '');
+      const r = parseInt(m.substring(0, 2), 16);
+      const g = parseInt(m.substring(2, 4), 16);
+      const b = parseInt(m.substring(4, 6), 16);
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
